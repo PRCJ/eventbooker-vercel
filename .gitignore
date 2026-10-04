@@ -11,3 +11,5 @@ secrets.txt
 .DS_Store
 dist/
 coverage/
+.vercel
+.env*

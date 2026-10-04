@@ -1,7 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "//regions": "cle1 is Cleveland (us-east-2), the same region as the Neon database. Every request is one database round trip, so co-locating them is the single biggest latency win available.",
   "regions": ["cle1"],
   "functions": {
     "api/index.ts": {
@@ -9,8 +8,6 @@
       "maxDuration": 15
     }
   },
-  "//": "Vercel checks the filesystem (public/) before applying rewrites, so the dashboard at / is served statically and every API path falls through to the function.",
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
-  "//crons": "Hobby rejects anything more frequent than daily at deploy time. That is fine here: expired holds are treated as available by every read path the moment they lapse (seat_is_free), so this sweep only tidies rows and correctness never waits on it. Use POST /admin/sweep to reclaim on demand.",
   "crons": [{ "path": "/api/cron/sweep", "schedule": "0 4 * * *" }]
 }

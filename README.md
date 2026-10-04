@@ -260,6 +260,14 @@ vercel deploy --prod
 The app refuses to boot in production with the development secrets still in
 place.
 
+Notes on `vercel.json` (it rejects comment keys, so the reasoning lives here):
+
+- `regions: ["cle1"]` — Cleveland is `us-east-2`, the same region as the Neon
+  database. Every request is one database round trip, so co-locating the
+  function with the database is the single biggest latency win available.
+- `rewrites` sends everything to the function, but Vercel checks `public/`
+  first, so the dashboard at `/` is served as a static file.
+
 `vercel.json` registers a daily cron against `/api/cron/sweep`, because Vercel's
 Hobby plan rejects anything more frequent at deploy time. That costs nothing
 here: a lapsed hold is already treated as available by every read and by the

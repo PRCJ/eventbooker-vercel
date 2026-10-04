@@ -166,8 +166,12 @@ async function main() {
 
   section('Time-boxed holds & expiry');
 
+  // Two shows on purpose. Observing a hold and watching one lapse need
+  // opposite TTLs, and sharing one short TTL makes the "is it held?" checks
+  // fail on any environment where a round trip takes longer than the hold
+  // (vercel dev, or any remote target).
   const holdShow = await c.post('/shows',
-    { name: `hold-${stamp}`, seats: ['H1', 'H2'], price_paise: 10000, hold_ttl_seconds: 2 }, c.auth(ADMIN));
+    { name: `hold-${stamp}`, seats: ['H1'], price_paise: 10000, hold_ttl_seconds: 600 }, c.auth(ADMIN));
   const hid = holdShow.body.id;
   const held = await c.post(`/shows/${hid}/reserve`, { seats: ['H1'], idempotency_key: uniq() }, c.auth(alice));
   check('reserve on a hold-mode show returns status held', held.status === 201 && held.body?.status === 'held',
@@ -183,15 +187,19 @@ async function main() {
   check('the owner can convert a hold into a confirmation', confirmed.status === 200 &&
     confirmed.body?.status === 'confirmed', `${confirmed.status} ${confirmed.raw.slice(0, 160)}`);
 
-  const held2 = await c.post(`/shows/${hid}/reserve`, { seats: ['H2'], idempotency_key: uniq() }, c.auth(alice));
-  check('second hold placed', held2.status === 201);
+  // Separate short-TTL show for the expiry half.
+  const expiryShow = await c.post('/shows',
+    { name: `expire-${stamp}`, seats: ['H2'], price_paise: 10000, hold_ttl_seconds: 2 }, c.auth(ADMIN));
+  const eid = expiryShow.body.id;
+  const held2 = await c.post(`/shows/${eid}/reserve`, { seats: ['H2'], idempotency_key: uniq() }, c.auth(alice));
+  check('second hold placed', held2.status === 201, `got ${held2.status}`);
   console.log('        waiting 2.5s for the hold to lapse…');
   await new Promise((r) => setTimeout(r, 2500));
 
-  const afterExpiry = await c.get(`/shows/${hid}`);
+  const afterExpiry = await c.get(`/shows/${eid}`);
   check('a lapsed hold reads as available without any sweeper running',
     afterExpiry.body?.seats?.H2 === 'available', `H2 is ${afterExpiry.body?.seats?.H2}`);
-  const grabExpired = await c.post(`/shows/${hid}/reserve`, { seats: ['H2'], idempotency_key: uniq() }, c.auth(bob));
+  const grabExpired = await c.post(`/shows/${eid}/reserve`, { seats: ['H2'], idempotency_key: uniq() }, c.auth(bob));
   check('another buyer can take the expired seat', grabExpired.status === 201, `got ${grabExpired.status}`);
   const lateConfirm = await c.post(`/reservations/${held2.body.reservation_id}/confirm`, {}, c.auth(alice));
   check('confirming a lapsed hold is refused, not honoured', lateConfirm.status === 409, `got ${lateConfirm.status}`);

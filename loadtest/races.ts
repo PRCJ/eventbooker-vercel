@@ -164,9 +164,17 @@ async function main() {
       ['available', 'held', 'confirmed'].includes(stillOwned.body.seats.T1),
       `T1 is ${stillOwned.body.seats.T1}`);
 
+    // Wait until the original hold is definitively past its own expires_at
+    // before testing this. Otherwise the result depends on whether the burst
+    // outran the TTL: on a fast local run the hold is still valid and
+    // confirming is the correct behaviour, not a bug.
+    const lapseAt = Date.parse(held.body.expires_at);
+    const waitMs = lapseAt - Date.now() + 250;
+    if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+
     const confirmLapsed = await c.post(`/reservations/${held.body.reservation_id}/confirm`, {}, c.auth(first));
-    check('the original holder cannot confirm after losing the seat', confirmLapsed.status === 409,
-      `got ${confirmLapsed.status}`);
+    check('a hold cannot be confirmed once it has lapsed', confirmLapsed.status === 409,
+      `got ${confirmLapsed.status} ${confirmLapsed.raw.slice(0, 120)}`);
     const st = await c.get(`/shows/${showId}`);
     check('reconciliation holds across expiry', st.body.counts.available + st.body.counts.held +
       st.body.counts.confirmed === 1);
