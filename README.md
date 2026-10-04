@@ -262,9 +262,11 @@ HTTP/2 403
 x-vercel-mitigated: deny
 ```
 
-on *every* route including `/healthz`, the request never reaches the function,
-and the ban outlasts the burst by a good while. Bypass rules and "pause
-mitigations" do not clear it, because it is applied below the project firewall.
+on *every* route including `/healthz`, and the request never reaches the
+function. Bypass rules and "pause mitigations" do not clear it, because it is
+applied below the project firewall. It does lift on its own — measured at
+roughly 20–25 minutes here, still denying at a 10-minute probe and back to
+`200` by ~25 — so a tripped deployment is embarrassing rather than broken.
 
 This happened here. A 20,000-request run at 400 concurrency got 17,507 requests
 through before the edge cut in, and those 17,507 were clean:
@@ -289,8 +291,9 @@ npx tsx loadtest/storm.ts --url http://localhost:3000 --requests 20000 --concurr
 ```
 
 Use the live URL for functional checks and the dashboard, where the request
-rate is ordinary and nothing gets mitigated. The correctness properties being
-tested live in Postgres, not in the host — the same SQL runs in both places.
+rate is ordinary and nothing gets mitigated — all 64 checks pass against the
+deployment. The correctness properties being tested live in Postgres, not in
+the host, and the same SQL runs in both places.
 
 A note on the latency numbers, because the headline figure is misleading. The
 load generator is in India and the service is in Ohio, so ~200ms of every
