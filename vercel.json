@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "//regions": "cle1 is Cleveland (us-east-2), the same region as the Neon database. Every request is one database round trip, so co-locating them is the single biggest latency win available.",
+  "regions": ["cle1"],
   "functions": {
     "api/index.ts": {
       "memory": 1024,

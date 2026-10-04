@@ -2,6 +2,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
+# Local credential scratch files -- never commit a connection string.
+neon.txt
+*.secret
+secrets.txt
 .vercel/
 *.log
 .DS_Store
