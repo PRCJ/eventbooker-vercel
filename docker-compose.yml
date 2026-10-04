@@ -34,8 +34,11 @@ services:
       migrate: { condition: service_completed_successfully }
     environment:
       DATABASE_URL: postgres://eventbooker:eventbooker@db:5432/eventbooker
-      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-me}
-      ADMIN_TOKEN: ${ADMIN_TOKEN:-local-dev-admin-change-me}
+      # These match the app's dev defaults so a fresh clone can run the test
+      # suites with no flags. The 'dev-only' prefix is what assertProductionSafety
+      # refuses to boot with, so they cannot reach production by accident.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-only-admin-token}
       NODE_ENV: development
       PG_POOL_MAX: 40
     ports: ['3000:3000']

@@ -15,6 +15,16 @@ export interface Response {
   body: any;
   raw: string;
   ms: number;
+  headers: Record<string, string>;
+}
+
+/**
+ * True when the response never reached the application: a CDN or WAF answered
+ * instead. Worth distinguishing, because a platform 403 is not a domain
+ * decline and counting it as one would slander a service that behaved.
+ */
+export function isEdgeBlocked(r: Response): boolean {
+  return r.status === 403 && (Boolean(r.headers['x-vercel-mitigated']) || r.body === null);
 }
 
 export class Client {
@@ -59,7 +69,11 @@ export class Client {
             } catch {
               /* non-JSON bodies are reported as-is via `raw` */
             }
-            resolve({ status: res.statusCode ?? 0, body: parsed, raw, ms: performance.now() - started });
+            const headers: Record<string, string> = {};
+            for (const [k, v] of Object.entries(res.headers)) {
+              headers[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '');
+            }
+            resolve({ status: res.statusCode ?? 0, body: parsed, raw, headers, ms: performance.now() - started });
           });
         },
       );

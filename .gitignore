@@ -2,8 +2,9 @@ node_modules/
 .env
 .env.local
 .env.*.local
-# Local credential scratch files -- never commit a connection string.
+# Local credential scratch files -- never commit a connection string or token.
 neon.txt
+hub.txt
 *.secret
 secrets.txt
 .vercel/

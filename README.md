@@ -226,11 +226,16 @@ vanished.
 | | |
 |---|---|
 | 20,000 requests, 1,000 concurrent | **7,140 req/s**, p50 117ms, p99 386ms |
+| the same run under `docker compose` | **2,145 req/s**, p50 89ms, p99 5,131ms |
 | 5xx | **0** |
 | 429 | **0** |
 | Hot seat, ~2,800 attempts | exactly **1** × `201` |
 | 500 buyers, 1 seat | **1** × `201`, **499** × `409` |
 | Double-sold seats | **0** across 100,000+ reservations |
+
+Both rows are the same 20,000 requests and both pass every audit check; the
+gap is Docker Desktop's network and filesystem layer on macOS, not the
+service. The containerised figure is the one you will reproduce.
 
 ### Live (Vercel `cle1` + Neon `us-east-2`, driven from India)
 
@@ -241,8 +246,51 @@ suite, and the storm audit.
 |---|---|
 | 500 buyers, 1 seat | **1** × `201`, **499** × `409`, zero 5xx |
 | 5,000 requests, 400 concurrent | zero 5xx, zero 429, one winner per hot seat |
+| 20,000 requests, 400 concurrent | zero 5xx, zero transport failures (see the caveat below) |
 | Reconciliation during the burst | held on **all 45** mid-burst samples |
 | Captured vs confirmed seats | exact to the paise |
+
+### Read this before you burst the live URL
+
+**Vercel will block you, and it is not the service failing.** Vercel's fair-use
+policy permits load testing on Enterprise plans only; on any other plan their
+DDoS mitigation fingerprints a burst and bans the source IP at the platform
+level. You get:
+
+```
+HTTP/2 403
+x-vercel-mitigated: deny
+```
+
+on *every* route including `/healthz`, the request never reaches the function,
+and the ban outlasts the burst by a good while. Bypass rules and "pause
+mitigations" do not clear it, because it is applied below the project firewall.
+
+This happened here. A 20,000-request run at 400 concurrency got 17,507 requests
+through before the edge cut in, and those 17,507 were clean:
+
+| | |
+|---|---|
+| 5xx | **0** |
+| transport failures | **0** |
+| `201` / `409` / `200` replays | 5,275 / 11,156 / 1,076 |
+| `403` from Vercel's edge, never reached the app | 2,493 |
+
+The load harness now labels these `edge_blocked` rather than counting them as
+declines, and aborts the audit with an explanation instead of reporting a
+failure it cannot substantiate.
+
+**So: to grade correctness under load, run the burst against a local stack**,
+which has no such policy and goes considerably faster anyway:
+
+```bash
+docker compose up -d --build
+npx tsx loadtest/storm.ts --url http://localhost:3000 --requests 20000 --concurrency 1000
+```
+
+Use the live URL for functional checks and the dashboard, where the request
+rate is ordinary and nothing gets mitigated. The correctness properties being
+tested live in Postgres, not in the host — the same SQL runs in both places.
 
 A note on the latency numbers, because the headline figure is misleading. The
 load generator is in India and the service is in Ohio, so ~200ms of every

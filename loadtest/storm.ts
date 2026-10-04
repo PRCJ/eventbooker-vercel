@@ -9,7 +9,7 @@
  * The audit is the point. Throughput numbers are reported, but a fast service
  * that sells A12 twice has failed.
  */
-import { Client, fmt, percentile, pool } from './client.js';
+import { Client, fmt, isEdgeBlocked, percentile, pool } from './client.js';
 
 const args = new Map<string, string>();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i].replace(/^--/, ''), process.argv[i + 1]);
@@ -137,7 +137,7 @@ async function main() {
         c.auth(tokens[job.userIdx]));
       outcomes[i] = {
         status: res.status,
-        code: res.body?.error?.code,
+        code: isEdgeBlocked(res) ? 'edge_blocked' : res.body?.error?.code,
         seats: res.body?.seats,
         reservationId: res.body?.reservation_id,
         userId: `storm-${stamp}-u${job.userIdx}`,
@@ -193,8 +193,28 @@ async function main() {
   const shed = byCode.get('overloaded') ?? 0;
   if (shed) notes.push(`${fmt(shed)} requests were shed with 429 (admission control) — these are capacity declines, not errors`);
 
+  // Requests a CDN or WAF answered never reached the service. They are not
+  // declines and they are not errors; they are missing data, and the rest of
+  // the audit compares client-side outcomes against server state, so a silent
+  // hole in the former would produce false accusations about the latter.
+  const edgeBlocked = byCode.get('edge_blocked') ?? 0;
+  if (edgeBlocked) {
+    notes.push(`${fmt(edgeBlocked)} requests were blocked at the edge before reaching the service ` +
+               `(403 x-vercel-mitigated) — the host's DDoS mitigation, not a response from the app`);
+  }
+
   // 2. Exactly one winner per hot seat.
   const finalState = await c.get(`/shows/${showId}`);
+  if (isEdgeBlocked(finalState) || !finalState.body?.seats) {
+    console.log(`\n\x1b[31maudit aborted\x1b[0m: could not read final show state ` +
+                `(HTTP ${finalState.status}${finalState.headers['x-vercel-mitigated'] ? ', blocked at the edge' : ''}).`);
+    console.log(`  The burst itself completed; the numbers above stand. What cannot be verified is the\n` +
+                `  server-side reconciliation, because the host refused the read. Re-run against a local\n` +
+                `  stack (docker compose up) to audit at full rate.`);
+    for (const n of notes) console.log(`  note: ${n}`);
+    c.destroy();
+    process.exit(1);
+  }
   const seatMap: Record<string, string> = finalState.body.seats;
 
   let hotOk = true;
