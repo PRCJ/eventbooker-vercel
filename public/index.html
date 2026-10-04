@@ -27,6 +27,8 @@
   .card h2 { font-size:11px; letter-spacing:.12em; text-transform:uppercase;
              color:var(--dim); margin:0 0 12px; font-weight:600; }
   .wide { grid-column:1/-1; }
+  /* Capped so a long list of shows can never push the seat map off-screen. */
+  .scroll { max-height:220px; overflow:auto; }
   .big { font-size:30px; font-weight:600; letter-spacing:-.02em; }
   .row { display:flex; justify-content:space-between; gap:10px; padding:4px 0; }
   .row + .row { border-top:1px solid #1a2130; }
@@ -92,6 +94,17 @@
     <div class="row"><span class="dim">driver</span><b id="driver">—</b></div>
   </div>
 
+  <div class="card wide">
+    <h2>Seat map</h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--avail)"></span>available</span>
+      <span><span class="swatch" style="background:var(--held)"></span>held</span>
+      <span><span class="swatch" style="background:var(--conf)"></span>confirmed</span>
+      <span id="maperr" class="err"></span>
+    </div>
+    <div id="map" class="grid"></div>
+  </div>
+
   <div class="card">
     <h2>Request outcomes</h2>
     <table><thead><tr><th>outcome</th><th class="n">count</th></tr></thead>
@@ -106,19 +119,10 @@
 
   <div class="card">
     <h2>All shows</h2>
-    <table><thead><tr><th>show</th><th class="n">avail</th><th class="n">held</th><th class="n">conf</th><th class="n">ok</th></tr></thead>
-      <tbody id="shows"><tr><td colspan="5" class="dim">no data</td></tr></tbody></table>
-  </div>
-
-  <div class="card wide">
-    <h2>Seat map</h2>
-    <div class="legend">
-      <span><span class="swatch" style="background:var(--avail)"></span>available</span>
-      <span><span class="swatch" style="background:var(--held)"></span>held</span>
-      <span><span class="swatch" style="background:var(--conf)"></span>confirmed</span>
-      <span id="maperr" class="err"></span>
+    <div class="scroll">
+      <table><thead><tr><th>show</th><th class="n">avail</th><th class="n">held</th><th class="n">conf</th><th class="n">ok</th></tr></thead>
+        <tbody id="shows"><tr><td colspan="5" class="dim">no data</td></tr></tbody></table>
     </div>
-    <div id="map" class="grid"></div>
   </div>
 </main>
 

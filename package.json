@@ -16,7 +16,8 @@
     "storm": "tsx loadtest/storm.ts",
     "typecheck": "tsc --noEmit",
     "test:races": "tsx loadtest/races.ts",
-    "verify": "tsx scripts/verify.ts"
+    "verify": "tsx scripts/verify.ts",
+    "demo": "tsx scripts/demo.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
