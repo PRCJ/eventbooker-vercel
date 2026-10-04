@@ -258,5 +258,10 @@ vercel deploy --prod
 ```
 
 The app refuses to boot in production with the development secrets still in
-place. `vercel.json` registers a one-minute cron against `/api/cron/sweep` to
-reclaim lapsed holds, since serverless has no long-lived process to run a timer.
+place.
+
+`vercel.json` registers a daily cron against `/api/cron/sweep`, because Vercel's
+Hobby plan rejects anything more frequent at deploy time. That costs nothing
+here: a lapsed hold is already treated as available by every read and by the
+reserve path the instant it expires, so the sweep only tidies rows. Hit
+`POST /admin/sweep` to reclaim on demand.
