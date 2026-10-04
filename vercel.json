@@ -4,8 +4,7 @@
   "regions": ["cle1"],
   "functions": {
     "api/index.ts": {
-      "memory": 1024,
-      "maxDuration": 15
+      "maxDuration": 60
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
