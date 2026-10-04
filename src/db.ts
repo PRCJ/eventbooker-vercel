@@ -21,7 +21,13 @@ export interface Db {
   close(): Promise<void>;
 }
 
-const useNeonHttp = /neon\.tech|neon\.build/.test(config.databaseUrl);
+// Neon's HTTP driver is the default against Neon because it needs no pooling,
+// but DB_DRIVER=pg forces the ordinary pooled client against the same database
+// (use Neon's -pooler host). That override exists so a driver-level problem in
+// production is a config change, not a redeploy.
+const forced = process.env.DB_DRIVER;
+const useNeonHttp =
+  forced === 'neon' || (forced !== 'pg' && /neon\.tech|neon\.build/.test(config.databaseUrl));
 
 function makeNeon(): Db {
   const sql = neon(config.databaseUrl);
@@ -54,7 +60,7 @@ function makePgPool(): Db {
     // A request that cannot be served in this long is better off failing fast
     // than holding a connection hostage while the stampede continues.
     statement_timeout: config.statementTimeoutMs,
-    ssl: /sslmode=require|supabase|render\.com|amazonaws/.test(config.databaseUrl)
+    ssl: /sslmode=require|neon\.tech|supabase|render\.com|amazonaws/.test(config.databaseUrl)
       ? { rejectUnauthorized: false }
       : undefined,
   });
