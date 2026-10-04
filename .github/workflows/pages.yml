@@ -1,0 +1,46 @@
+name: Deploy dashboard to GitHub Pages
+
+# The dashboard is a single static file that talks to the API over CORS, so it
+# can live on Pages while the service itself runs on Vercel. Set the API base
+# once in the UI (or pass ?api=https://your-app.vercel.app) and it sticks.
+
+on:
+  push:
+    branches: [main]
+    paths: ['public/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Point the static dashboard at the deployed API. Set the API_BASE_URL
+      # repository variable to your Vercel URL; without it the page falls back
+      # to same-origin and the field in the header can be filled in by hand.
+      - name: Write dashboard config
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          printf "window.EB_API_BASE = '%s';\n" "$API_BASE_URL" > public/config.js
+          cat public/config.js
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deploy
+        uses: actions/deploy-pages@v4

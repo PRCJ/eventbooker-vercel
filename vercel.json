@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "functions": {
+    "api/index.ts": {
+      "memory": 1024,
+      "maxDuration": 15
+    }
+  },
+  "//": "Vercel checks the filesystem (public/) before applying rewrites, so the dashboard at / is served statically and every API path falls through to the function.",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
+  "crons": [{ "path": "/api/cron/sweep", "schedule": "* * * * *" }]
+}

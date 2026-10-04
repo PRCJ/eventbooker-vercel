@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EventBooker — live</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#131822; --line:#222a39; --txt:#e6e9f0; --dim:#8b95ab;
+    --ok:#3ddc97; --warn:#ffb454; --bad:#ff5c6c; --held:#ffb454; --conf:#5a7cff; --avail:#243049;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  header { display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+           padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel); }
+  h1 { font-size:15px; margin:0; letter-spacing:.08em; text-transform:uppercase; }
+  .sp { flex:1; }
+  input, select, button {
+    background:#0d1119; color:var(--txt); border:1px solid var(--line);
+    border-radius:6px; padding:6px 10px; font:inherit; font-size:12px; }
+  button { cursor:pointer; }
+  button:hover { border-color:#39455e; }
+  main { padding:20px; display:grid; gap:16px;
+         grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .card h2 { font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+             color:var(--dim); margin:0 0 12px; font-weight:600; }
+  .wide { grid-column:1/-1; }
+  .big { font-size:30px; font-weight:600; letter-spacing:-.02em; }
+  .row { display:flex; justify-content:space-between; gap:10px; padding:4px 0; }
+  .row + .row { border-top:1px solid #1a2130; }
+  .dim { color:var(--dim); }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill.ok  { background:rgba(61,220,151,.14); color:var(--ok); }
+  .pill.bad { background:rgba(255,92,108,.14); color:var(--bad); }
+  .grid { display:flex; flex-wrap:wrap; gap:3px; max-height:360px; overflow:auto; }
+  .seat { width:34px; height:24px; border-radius:4px; font-size:9px; display:flex;
+          align-items:center; justify-content:center; background:var(--avail);
+          color:#7d8aa5; overflow:hidden; transition:background .2s; }
+  .seat.held      { background:var(--held); color:#2b1d00; }
+  .seat.confirmed { background:var(--conf); color:#fff; }
+  .seat.flash     { outline:2px solid #fff; }
+  .legend { display:flex; gap:14px; font-size:11px; color:var(--dim); margin-bottom:10px; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:-1px; margin-right:5px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:5px 0; border-bottom:1px solid var(--line); }
+  td { padding:5px 0; border-bottom:1px solid #1a2130; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  canvas { width:100%; height:70px; display:block; }
+  .err { color:var(--bad); font-size:12px; }
+  .bar { height:6px; background:#1a2130; border-radius:3px; overflow:hidden; margin-top:6px; }
+  .bar > i { display:block; height:100%; background:var(--conf); }
+</style>
+</head>
+<body>
+<header>
+  <h1>EventBooker</h1>
+  <span id="conn" class="pill bad">connecting</span>
+  <span class="sp"></span>
+  <input id="api" size="30" placeholder="API base (blank = same origin)" />
+  <select id="show"><option value="">— pick a show —</option></select>
+  <select id="rate">
+    <option value="500">0.5s</option>
+    <option value="1000" selected>1s</option>
+    <option value="2000">2s</option>
+    <option value="5000">5s</option>
+  </select>
+  <button id="pause">pause</button>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Reconciliation invariant</h2>
+    <div class="big"><span id="inv-sum">—</span> <span class="dim">/</span> <span id="inv-total">—</span></div>
+    <div class="dim" style="font-size:11px;margin:4px 0 10px">available + held + confirmed == total_seats</div>
+    <div id="inv-pill" class="pill bad">unknown</div>
+  </div>
+
+  <div class="card">
+    <h2>Seats</h2>
+    <div class="row"><span><span class="swatch" style="background:var(--avail)"></span>available</span><b id="c-avail" class="n">—</b></div>
+    <div class="row"><span><span class="swatch" style="background:var(--held)"></span>held</span><b id="c-held" class="n">—</b></div>
+    <div class="row"><span><span class="swatch" style="background:var(--conf)"></span>confirmed</span><b id="c-conf" class="n">—</b></div>
+    <div class="bar"><i id="soldbar" style="width:0%"></i></div>
+  </div>
+
+  <div class="card">
+    <h2>Throughput — seats confirmed/s</h2>
+    <canvas id="spark" width="600" height="70"></canvas>
+    <div class="row"><span class="dim">in flight</span><b id="inflight" class="n">—</b></div>
+    <div class="row"><span class="dim">driver</span><b id="driver">—</b></div>
+  </div>
+
+  <div class="card">
+    <h2>Request outcomes</h2>
+    <table><thead><tr><th>outcome</th><th class="n">count</th></tr></thead>
+      <tbody id="outcomes"><tr><td colspan="2" class="dim">no data</td></tr></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2>Most contested seats</h2>
+    <table><thead><tr><th>seat</th><th class="n">attempts</th></tr></thead>
+      <tbody id="hot"><tr><td colspan="2" class="dim">no data</td></tr></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2>All shows</h2>
+    <table><thead><tr><th>show</th><th class="n">avail</th><th class="n">held</th><th class="n">conf</th><th class="n">ok</th></tr></thead>
+      <tbody id="shows"><tr><td colspan="5" class="dim">no data</td></tr></tbody></table>
+  </div>
+
+  <div class="card wide">
+    <h2>Seat map</h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--avail)"></span>available</span>
+      <span><span class="swatch" style="background:var(--held)"></span>held</span>
+      <span><span class="swatch" style="background:var(--conf)"></span>confirmed</span>
+      <span id="maperr" class="err"></span>
+    </div>
+    <div id="map" class="grid"></div>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Same-origin when served by the API; an explicit base when this page is
+  // hosted statically (GitHub Pages). ?api=... wins, then the saved value.
+  var params = new URLSearchParams(location.search);
+  var apiBase = params.get('api') || localStorage.getItem('eb_api') || window.EB_API_BASE || '';
+  $('api').value = apiBase;
+  $('api').addEventListener('change', function () {
+    apiBase = $('api').value.replace(/\/+$/, '');
+    localStorage.setItem('eb_api', apiBase);
+    shows = null; tick();
+  });
+
+  var showId = params.get('show_id') || '';
+  $('show').addEventListener('change', function () { showId = $('show').value; prev = {}; tick(); });
+
+  var paused = false;
+  $('pause').addEventListener('click', function () {
+    paused = !paused;
+    $('pause').textContent = paused ? 'resume' : 'pause';
+    if (!paused) tick();
+  });
+
+  var period = 1000;
+  $('rate').addEventListener('change', function () { period = Number($('rate').value); });
+
+  var url = function (p) { return (apiBase || '') + p; };
+  var shows = null, prev = {}, lastConfirmed = null, lastAt = null;
+  var series = [];
+
+  function setConn(ok, label) {
+    var el = $('conn');
+    el.className = 'pill ' + (ok ? 'ok' : 'bad');
+    el.textContent = label;
+  }
+
+  function drawSpark() {
+    var cv = $('spark'), ctx = cv.getContext('2d');
+    var w = cv.width, h = cv.height;
+    ctx.clearRect(0, 0, w, h);
+    if (series.length < 2) return;
+    var max = Math.max.apply(null, series.concat([1]));
+    ctx.beginPath();
+    ctx.strokeStyle = '#5a7cff';
+    ctx.lineWidth = 2;
+    for (var i = 0; i < series.length; i++) {
+      var x = (i / (series.length - 1)) * w;
+      var y = h - (series[i] / max) * (h - 6) - 3;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+    ctx.fillStyle = 'rgba(90,124,255,.15)';
+    ctx.fill();
+    ctx.fillStyle = '#8b95ab';
+    ctx.font = '10px ui-monospace,monospace';
+    ctx.fillText('peak ' + max.toFixed(1) + '/s', 4, 11);
+  }
+
+  function renderRows(tbody, rows, cols) {
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="' + cols + '" class="dim">no data</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+
+  function renderMap(seatMap) {
+    var el = $('map');
+    if (!seatMap) { el.innerHTML = '<span class="dim">pick a show</span>'; return; }
+    var labels = Object.keys(seatMap);
+    if (labels.length > 2000) {
+      $('maperr').textContent = 'showing first 2000 of ' + labels.length + ' seats';
+      labels = labels.slice(0, 2000);
+    } else {
+      $('maperr').textContent = '';
+    }
+    // Natural sort so A2 lands before A10.
+    labels.sort(function (a, b) {
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    var html = '';
+    for (var i = 0; i < labels.length; i++) {
+      var lbl = labels[i], st = seatMap[lbl];
+      var flash = prev[lbl] && prev[lbl] !== st ? ' flash' : '';
+      html += '<div class="seat ' + st + flash + '" title="' + esc(lbl) + ': ' + st + '">' + esc(lbl) + '</div>';
+    }
+    el.innerHTML = html;
+    prev = seatMap;
+  }
+
+  function tick() {
+    if (paused) return;
+    var q = '/api/live' + (showId ? '?show_id=' + encodeURIComponent(showId) : '');
+    fetch(url(q), { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        setConn(true, 'live');
+        $('inflight').textContent = d.in_flight + ' / ' + d.in_flight_limit;
+        $('driver').textContent = d.driver;
+
+        var opts = '<option value="">— pick a show —</option>';
+        var rows = [];
+        for (var i = 0; i < d.shows.length; i++) {
+          var s = d.shows[i];
+          opts += '<option value="' + esc(s.id) + '"' + (s.id === showId ? ' selected' : '') + '>' +
+                  esc(s.name) + ' (' + s.total_seats + ')</option>';
+          rows.push('<tr><td>' + esc(s.name) + '</td><td class="n">' + s.available +
+                    '</td><td class="n">' + s.held + '</td><td class="n">' + s.confirmed +
+                    '</td><td class="n">' + (s.reconciled ? '<span style="color:var(--ok)">yes</span>'
+                                                          : '<span style="color:var(--bad)">NO</span>') +
+                    '</td></tr>');
+        }
+        if ($('show').options.length !== d.shows.length + 1 || !showId) $('show').innerHTML = opts;
+        renderRows($('shows'), rows, 5);
+
+        if (!d.focus) {
+          renderMap(null);
+          return;
+        }
+        var st = d.focus.show, c = st.counts, sum = c.available + c.held + c.confirmed;
+        $('c-avail').textContent = c.available;
+        $('c-held').textContent = c.held;
+        $('c-conf').textContent = c.confirmed;
+        $('inv-sum').textContent = sum;
+        $('inv-total').textContent = st.total_seats;
+        var ok = sum === st.total_seats;
+        $('inv-pill').className = 'pill ' + (ok ? 'ok' : 'bad');
+        $('inv-pill').textContent = ok ? 'HOLDS' : 'VIOLATED';
+        $('soldbar').style.width = (st.total_seats ? (c.confirmed / st.total_seats) * 100 : 0) + '%';
+
+        var now = Date.now();
+        if (lastConfirmed !== null && lastAt) {
+          var dt = (now - lastAt) / 1000;
+          if (dt > 0) {
+            series.push(Math.max(0, (c.confirmed - lastConfirmed) / dt));
+            if (series.length > 120) series.shift();
+            drawSpark();
+          }
+        }
+        lastConfirmed = c.confirmed;
+        lastAt = now;
+
+        renderRows($('outcomes'), d.focus.outcomes.map(function (o) {
+          return '<tr><td>' + esc(o.outcome) + '</td><td class="n">' + o.count + '</td></tr>';
+        }), 2);
+        renderRows($('hot'), d.focus.most_contested.map(function (o) {
+          return '<tr><td>' + esc(o.seat) + '</td><td class="n">' + o.attempts + '</td></tr>';
+        }), 2);
+
+        renderMap(st.seats);
+      })
+      .catch(function (e) { setConn(false, 'error: ' + e.message); });
+  }
+
+  var timer = null;
+  function schedule() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(tick, period);
+  }
+  $('rate').addEventListener('change', schedule);
+
+  tick();
+  schedule();
+})();
+</script>
+</body>
+</html>

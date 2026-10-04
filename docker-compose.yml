@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: eventbooker
+      POSTGRES_PASSWORD: eventbooker
+      POSTGRES_USER: eventbooker
+    ports: ['5433:5432']
+    # The burst is short and write-heavy; these let a laptop container behave
+    # more like the managed Postgres the service actually runs against.
+    command: >
+      postgres -c max_connections=200
+               -c shared_buffers=256MB
+               -c synchronous_commit=off
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U eventbooker -d eventbooker']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://eventbooker:eventbooker@db:5432/eventbooker
+    command: ['npx', 'tsx', 'scripts/migrate.ts']
+    restart: 'no'
+
+  api:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://eventbooker:eventbooker@db:5432/eventbooker
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-me}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-local-dev-admin-change-me}
+      NODE_ENV: development
+      PG_POOL_MAX: 40
+    ports: ['3000:3000']

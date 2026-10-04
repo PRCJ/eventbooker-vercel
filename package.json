@@ -1,0 +1,32 @@
+{
+  "name": "eventbooker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Assigned-seat ticketing that stays correct under a stampede.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch server.ts",
+    "start": "tsx server.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "test:sql": "psql -q -v ON_ERROR_STOP=1 -d \"${DATABASE_URL:-eventbooker}\" -f db/test_logic.sql",
+    "test:api": "tsx loadtest/api_test.ts",
+    "storm": "tsx loadtest/storm.ts",
+    "typecheck": "tsc --noEmit",
+    "test:races": "tsx loadtest/races.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "hono": "^4.6.14",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
