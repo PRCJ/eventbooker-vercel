@@ -15,7 +15,8 @@
     "test:api": "tsx loadtest/api_test.ts",
     "storm": "tsx loadtest/storm.ts",
     "typecheck": "tsc --noEmit",
-    "test:races": "tsx loadtest/races.ts"
+    "test:races": "tsx loadtest/races.ts",
+    "verify": "tsx scripts/verify.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
@@ -27,6 +28,7 @@
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vercel": "^62.2.0"
   }
 }
